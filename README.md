@@ -49,15 +49,15 @@ Plus Google Chrome, Visual Studio Code and Docker.
 
 ## The tools we build with
 
-git, gh, mise, Node, pnpm, Watchman, CocoaPods, fastlane, Maestro, the Supabase CLI, jq
-and ImageMagick.
+zsh with Oh My Zsh, git, gh, mise, Node, pnpm, Watchman, CocoaPods, fastlane, Maestro,
+the Supabase CLI, jq and ImageMagick.
 
 All from one [Brewfile](Brewfile). Add a line, run Computer again, and every Mac gets it.
 
 ## Three rules it never breaks
 
 1. **Secrets stay in 1Password.** SSH keys live in 1Password and its agent signs every
-   commit. Computer adds the public half to GitHub as a signing key, so your commits show
+   commit. No key yet? Computer makes one in 1Password for you. Computer adds the public half to GitHub as a signing key, so your commits show
    as Verified. No private key sits on the disk, and no secret goes in a file.
 2. **Run it twice, nothing changes.** Every step checks first. Run it on a new Mac or a
    year-old one: it adds what is missing and leaves the rest alone.
