@@ -211,7 +211,6 @@ git_config() {
       run git config --global user.signingkey "$key"
       run git config --global commit.gpgsign true
       ok "commits are signed with your 1Password SSH key"
-      say "Add the same key to GitHub as a signing key: Settings > SSH and GPG keys."
     fi
   else
     say "Commit signing turns on once the 1Password SSH agent is on (see the list at the end)."
@@ -229,7 +228,44 @@ github() {
   else
     gh auth login --git-protocol ssh --web
   fi
+  github_signing_key
   run mkdir -p "$HOME/Developer"
+}
+
+# GitHub shows a commit as Verified only when it knows the signing key, so add it there once.
+github_signing_key() {
+  local key body list tmp
+  key="$(git config --global user.signingkey || true)"
+  [ -n "$key" ] && have gh && gh auth status >/dev/null 2>&1 || return 0
+  body="$(printf '%s' "$key" | awk '{print $1" "$2}')"
+  # Reading signing keys needs a scope gh does not ask for by default; no list means no scope yet.
+  list="$(gh api user/ssh_signing_keys --jq '.[].key' 2>/dev/null || true)"
+  if [ -n "$list" ] && printf '%s\n' "$list" | grep -qF "$body"; then
+    ok "GitHub knows your signing key (commits show as Verified)"
+    return
+  fi
+  if [ "$DRY_RUN" = 1 ] || [ ! -t 0 ]; then
+    todo "Add your signing key to GitHub: run ./computer in a terminal, or GitHub > Settings > SSH and GPG keys > New SSH key, type Signing key"
+    return
+  fi
+  say "GitHub needs one more permission to add your signing key. A browser window opens."
+  if ! gh auth refresh -h github.com -s admin:ssh_signing_key; then
+    todo "Add your signing key to GitHub: GitHub > Settings > SSH and GPG keys > New SSH key, type Signing key"
+    return
+  fi
+  list="$(gh api user/ssh_signing_keys --jq '.[].key' 2>/dev/null || true)"
+  if printf '%s\n' "$list" | grep -qF "$body"; then
+    ok "GitHub knows your signing key (commits show as Verified)"
+    return
+  fi
+  tmp="$(mktemp)"
+  printf '%s\n' "$body" >"$tmp"
+  if gh ssh-key add "$tmp" --type signing --title "1Password signing key ($(scutil --get ComputerName 2>/dev/null || hostname))"; then
+    ok "added your signing key to GitHub (commits show as Verified)"
+  else
+    todo "Add your signing key to GitHub: GitHub > Settings > SSH and GPG keys > New SSH key, type Signing key"
+  fi
+  rm -f "$tmp"
 }
 
 macos_defaults() {
