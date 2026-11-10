@@ -264,7 +264,7 @@ sign_ins() {
   say "1Password first, then GitHub, Claude, Notion, Linear and Superhuman."
   if [ "$DRY_RUN" = 0 ] && [ -t 0 ]; then
     for app in 1Password Claude Notion Linear Superhuman; do
-      [ -d "/Applications/$app.app" ] && open -g -a "$app" || true
+      if [ -d "/Applications/$app.app" ]; then open -g -a "$app" || true; fi
     done
   fi
 }
