@@ -147,11 +147,24 @@ node() {
   fi
 }
 
+# The agent is on when its socket answers. ssh-add -l exits 0 (keys) or 1 (no keys) when it
+# can reach the agent, and 2 when it cannot.
+op_agent_on() {
+  [ -S "$OP_AGENT_SOCK" ] || return 1
+  local code=0
+  SSH_AUTH_SOCK="$OP_AGENT_SOCK" ssh-add -l >/dev/null 2>&1 || code=$?
+  [ "$code" -ne 2 ]
+}
+
 one_password() {
   bold "1Password"
   # SSH keys and commit signing come from 1Password: no private key on disk.
-  if [ ! -S "$OP_AGENT_SOCK" ]; then
-    todo "Open 1Password, sign in, and turn on Settings > Developer > Use the SSH agent."
+  if ! op_agent_on; then
+    if pgrep -xq 1Password; then
+      todo "In 1Password, turn on Settings > Developer > Use the SSH agent. If it is on already: quit 1Password (menu bar icon > Quit), open it again, and allow your terminal if macOS asks to access 1Password's data."
+    else
+      todo "Open 1Password and sign in. It must be running for its SSH agent; turn on Settings > Developer > Use the SSH agent if you have not yet."
+    fi
     return
   fi
   ok "the SSH agent is on"
@@ -188,7 +201,7 @@ git_config() {
 
   if [ "$(git config --global commit.gpgsign || true)" = "true" ]; then
     ok "commits are signed"
-  elif [ -S "$OP_AGENT_SOCK" ] && [ -x "$OP_SSH_SIGN" ]; then
+  elif op_agent_on && [ -x "$OP_SSH_SIGN" ]; then
     key="$(SSH_AUTH_SOCK="$OP_AGENT_SOCK" ssh-add -L 2>/dev/null | head -1 || true)"
     if [ -z "$key" ]; then
       todo "Add an SSH key in 1Password (New item > SSH Key), then run computer again to sign commits with it."
@@ -269,8 +282,14 @@ sign_ins() {
   say "computer never touches a password. Sign in to each app yourself:"
   say "1Password first, then GitHub, Claude, Notion, Linear and Superhuman."
   if [ "$DRY_RUN" = 0 ] && [ -t 0 ]; then
+    # Open each app for its sign-in once, on the first run; a rerun leaves your apps alone.
+    local opened="$HOME/.config/computer/opened"
+    mkdir -p "$opened"
     for app in 1Password Claude Notion Linear Superhuman; do
-      if [ -d "/Applications/$app.app" ]; then open -g -a "$app" || true; fi
+      if [ -d "/Applications/$app.app" ] && [ ! -e "$opened/$app" ]; then
+        open -g -a "$app" || true
+        touch "$opened/$app"
+      fi
     done
   fi
 }
@@ -297,7 +316,7 @@ doctor() {
   fi
 
   bold "1Password and Git"
-  if [ -S "$OP_AGENT_SOCK" ]; then ok "1Password SSH agent is on"; else todo "1Password SSH agent is off"; fi
+  if op_agent_on; then ok "1Password SSH agent is on"; else todo "1Password SSH agent is off"; fi
   if [ "$(git config --global commit.gpgsign || true)" = "true" ]; then ok "commits are signed"; else todo "commits are not signed"; fi
   if [ -n "$(git config --global user.email || true)" ]; then ok "git knows who you are"; else todo "git has no user.email"; fi
 
