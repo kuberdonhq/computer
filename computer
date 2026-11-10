@@ -245,12 +245,12 @@ github_signing_key() {
     return
   fi
   if [ "$DRY_RUN" = 1 ] || [ ! -t 0 ]; then
-    todo "Add your signing key to GitHub: run ./computer in a terminal, or GitHub > Settings > SSH and GPG keys > New SSH key, type Signing key"
+    todo "Your signing key is not on GitHub yet. Run ./computer in a terminal (not a dry run) and it adds it for you."
     return
   fi
   say "GitHub needs one more permission to add your signing key. A browser window opens."
   if ! gh auth refresh -h github.com -s admin:ssh_signing_key; then
-    todo "Add your signing key to GitHub: GitHub > Settings > SSH and GPG keys > New SSH key, type Signing key"
+    todo "GitHub did not get the permission to add your signing key. Run this, approve it in the browser, then run ./computer again: gh auth refresh -h github.com -s admin:ssh_signing_key"
     return
   fi
   list="$(gh api user/ssh_signing_keys --jq '.[].key' 2>/dev/null || true)"
@@ -263,7 +263,7 @@ github_signing_key() {
   if gh ssh-key add "$tmp" --type signing --title "1Password signing key ($(scutil --get ComputerName 2>/dev/null || hostname))"; then
     ok "added your signing key to GitHub (commits show as Verified)"
   else
-    todo "Add your signing key to GitHub: GitHub > Settings > SSH and GPG keys > New SSH key, type Signing key"
+    todo "GitHub refused your signing key. Add it by hand: open github.com/settings/ssh/new, pick Key type: Signing Key, and paste this line: $body"
   fi
   rm -f "$tmp"
 }
