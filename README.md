@@ -22,6 +22,9 @@ cd ~/Developer/computer
 A brand new Mac asks for Apple's command line tools the first time `git` runs. Install
 them, then run the lines above again.
 
+When it is done, it lists what is left for you, numbered. Do those, run it again, and it
+ends with "All set".
+
 Two modes that change nothing:
 
 ```sh
@@ -54,7 +57,8 @@ All from one [Brewfile](Brewfile). Add a line, run Computer again, and every Mac
 ## Three rules it never breaks
 
 1. **Secrets stay in 1Password.** SSH keys live in 1Password and its agent signs every
-   commit. No private key sits on the disk, and no secret goes in a file.
+   commit. Computer adds the public half to GitHub as a signing key, so your commits show
+   as Verified. No private key sits on the disk, and no secret goes in a file.
 2. **Run it twice, nothing changes.** Every step checks first. Run it on a new Mac or a
    year-old one: it adds what is missing and leaves the rest alone.
 3. **You sign in yourself.** Computer never touches a password. At the end it opens

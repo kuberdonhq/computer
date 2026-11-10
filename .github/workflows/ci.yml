@@ -6,10 +6,18 @@ on:
   pull_request:
 
 jobs:
-  # Cheap and fast: lint the scripts on Linux. A full run on a macOS runner comes
-  # once the repo is public, where macOS minutes are free.
+  # Lint the scripts on Linux, then a dry run and doctor on a real Mac (free for public repos).
   shellcheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: shellcheck -x computer macos/defaults.sh
+
+  macos:
+    runs-on: macos-latest
+    needs: shellcheck
+    steps:
+      - uses: actions/checkout@v4
+      # Both modes change nothing; they must run to the end on a Mac that is not set up yet.
+      - run: ./computer --dry-run
+      - run: ./computer doctor
