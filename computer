@@ -15,7 +15,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRY_RUN=0
 COMMAND="setup"
 WALLPAPER_URL="https://kuberdon.eu/press/wallpapers/kuberdon-mark-night-macbook.png"
-OP_AGENT_SOCK="$HOME/Library/Group Containers/2BUA8C4S2Y.com.1password/t/agent.sock"
+OP_AGENT_SOCK="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 OP_SSH_SIGN="/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
 
 for arg in "$@"; do
@@ -169,11 +169,11 @@ one_password() {
   fi
   ok "the SSH agent is on"
   mkdir -p "$HOME/.ssh"
-  if ! grep -qs "2BUA8C4S2Y.com.1password" "$HOME/.ssh/config"; then
+  if ! grep -qs "2BUA8C4S2C.com.1password" "$HOME/.ssh/config"; then
     if [ "$DRY_RUN" = 1 ]; then
       say "would point ~/.ssh/config at the 1Password agent"
     else
-      printf '\nHost *\n  IdentityAgent "~/Library/Group Containers/2BUA8C4S2Y.com.1password/t/agent.sock"\n' >>"$HOME/.ssh/config"
+      printf '\nHost *\n  IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"\n' >>"$HOME/.ssh/config"
       ok "your SSH config uses the 1Password agent"
     fi
   fi
