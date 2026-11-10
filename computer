@@ -15,7 +15,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRY_RUN=0
 COMMAND="setup"
 WALLPAPER_URL="https://kuberdon.eu/press/wallpapers/kuberdon-mark-night-macbook.png"
-AVATAR_URL="https://kuberdon.eu/press/logos/kuberdon-avatar-dark-1024.png"
 OP_AGENT_SOCK="$HOME/Library/Group Containers/2BUA8C4S2Y.com.1password/t/agent.sock"
 OP_SSH_SIGN="/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
 
@@ -31,8 +30,9 @@ done
 bold() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 say() { printf '  %s\n' "$*"; }
 ok() { printf '  \033[32m✓\033[0m %s\n' "$*"; }
-todo() { printf '  \033[33m•\033[0m %s\n' "$*"; TODOS=$((TODOS + 1)); }
-TODOS=0
+# Each to-do prints where it happens and is listed again, numbered, at the end.
+TODO_LIST=()
+todo() { printf '  \033[33m•\033[0m %s\n' "$*"; TODO_LIST+=("$*"); }
 
 # Runs a command, or only prints it with --dry-run.
 run() {
@@ -151,7 +151,7 @@ one_password() {
   bold "1Password"
   # SSH keys and commit signing come from 1Password: no private key on disk.
   if [ ! -S "$OP_AGENT_SOCK" ]; then
-    todo "Open 1Password, sign in, and turn on Settings > Developer > Use the SSH agent. Then run computer again."
+    todo "Open 1Password, sign in, and turn on Settings > Developer > Use the SSH agent."
     return
   fi
   ok "the SSH agent is on"
@@ -201,7 +201,7 @@ git_config() {
       say "Add the same key to GitHub as a signing key: Settings > SSH and GPG keys."
     fi
   else
-    todo "Commit signing waits for the 1Password SSH agent."
+    say "Commit signing turns on once the 1Password SSH agent is on (see the list at the end)."
   fi
 }
 
@@ -233,14 +233,13 @@ macos_defaults() {
 kuberdon_look() {
   bold "The Kuberdon look"
   local dir="$HOME/Pictures/Kuberdon"
-  local wallpaper="$dir/wallpaper.png" avatar="$dir/avatar.png"
+  local wallpaper="$dir/wallpaper.png"
   if [ "$DRY_RUN" = 1 ]; then
-    say "would download the wallpaper and the avatar to ~/Pictures/Kuberdon"
+    say "would download the wallpaper to ~/Pictures/Kuberdon"
     return
   fi
   mkdir -p "$dir"
   [ -s "$wallpaper" ] || curl -fsSL "$WALLPAPER_URL" -o "$wallpaper"
-  [ -s "$avatar" ] || curl -fsSL "$AVATAR_URL" -o "$avatar"
   if [ -f "$dir/.wallpaper-set" ]; then
     ok "wallpaper set"
   elif osascript -e "tell application \"System Events\" to tell every desktop to set picture to POSIX file \"$wallpaper\"" >/dev/null 2>&1; then
@@ -249,7 +248,6 @@ kuberdon_look() {
   else
     todo "Set the wallpaper by hand: right-click $wallpaper in Finder, Set Desktop Picture."
   fi
-  say "Your user picture: System Settings > Users & Groups > your picture > drag in $avatar"
 }
 
 local_layer() {
@@ -329,8 +327,15 @@ else
   sign_ins
 fi
 
-if [ "$TODOS" = 0 ]; then
+if [ "${#TODO_LIST[@]}" = 0 ]; then
   bold "All set. Welcome to Kuberdon :-)"
 else
-  bold "$TODOS thing(s) left for you, above. Run computer again after."
+  if [ "${#TODO_LIST[@]}" = 1 ]; then bold "1 thing left for you:"; else bold "${#TODO_LIST[@]} things left for you:"; fi
+  n=0
+  for item in "${TODO_LIST[@]}"; do
+    n=$((n + 1))
+    printf '  %s. %s\n' "$n" "$item"
+  done
+  echo
+  say "Then run ./computer again. It only does what is still missing."
 fi

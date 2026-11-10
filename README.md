@@ -65,8 +65,7 @@ All from one [Brewfile](Brewfile). Add a line, run Computer again, and every Mac
 File extensions and the path bar in Finder, screenshots in their own folder, fast key
 repeat and no smart quotes. That is all; see [macos/defaults.sh](macos/defaults.sh).
 
-Then the Kuberdon wallpaper from our [press kit](https://kuberdon.eu/press), and the
-avatar for your user picture.
+Then the Kuberdon wallpaper from our [press kit](https://kuberdon.eu/press).
 
 ## Make it yours
 
