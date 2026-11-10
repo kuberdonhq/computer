@@ -1,11 +1,4 @@
-<p>
-  <a href="https://kuberdon.eu">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset=".github/assets/kuberdon-lockup-white.svg">
-      <img src=".github/assets/kuberdon-lockup-black.svg" alt="Kuberdon" height="36">
-    </picture>
-  </a>
-</p>
+<a href="https://kuberdon.eu"><img src=".github/assets/kuberdon-banner.svg" alt="Kuberdon" width="100%"></a>
 
 # Computer
 
