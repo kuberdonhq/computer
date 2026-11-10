@@ -34,10 +34,10 @@ them, then run the lines above again.
 | 1Password | Every password, SSH key and secret. Nothing secret lives in a file. |
 | Claude and Claude Code | Thinking, writing and building. |
 | Conductor | Several Claude Code sessions side by side, each in its own worktree. |
-| Notion | Notes, plans and the company handbook. |
+| Notion | Notes, plans and docs. |
 | Linear | What we are building, and who is on it. |
 | Superhuman | Email, for everyone. |
-| Google Chrome | The browser we test in. |
+| Google Chrome | The browser. |
 | Rectangle | Windows to halves and thirds from the keyboard. |
 | Xcodes, Visual Studio Code, Docker | Building and running the apps. |
 
