@@ -1,0 +1,328 @@
+#!/usr/bin/env bash
+#
+# computer: one command to set up a Kuberdon MacBook.
+#
+#   ./computer            set up this Mac, or bring it up to date (safe to run again)
+#   ./computer doctor     say what is missing or out of date, change nothing
+#   ./computer --dry-run  print what it would do, change nothing
+#
+# Inspired by thoughtbot/laptop. Every step checks first and only acts when
+# something is missing, so a second run changes nothing.
+
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DRY_RUN=0
+COMMAND="setup"
+WALLPAPER_URL="https://kuberdon.eu/press/wallpapers/kuberdon-mark-night-macbook.png"
+AVATAR_URL="https://kuberdon.eu/press/logos/kuberdon-avatar-dark-1024.png"
+OP_AGENT_SOCK="$HOME/Library/Group Containers/2BUA8C4S2Y.com.1password/t/agent.sock"
+OP_SSH_SIGN="/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
+
+for arg in "$@"; do
+  case "$arg" in
+    doctor) COMMAND="doctor" ;;
+    --dry-run) DRY_RUN=1 ;;
+    -h | --help) sed -n '3,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "Unknown option: $arg" >&2; exit 2 ;;
+  esac
+done
+
+bold() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+say() { printf '  %s\n' "$*"; }
+ok() { printf '  \033[32m✓\033[0m %s\n' "$*"; }
+todo() { printf '  \033[33m•\033[0m %s\n' "$*"; TODOS=$((TODOS + 1)); }
+TODOS=0
+
+# Runs a command, or only prints it with --dry-run.
+run() {
+  if [ "$DRY_RUN" = 1 ]; then
+    printf '  would run: %s\n' "$*"
+  else
+    "$@"
+  fi
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# Sets a global git option only when it differs, so a second run is quiet.
+git_set() {
+  [ "$(git config --global "$1" || true)" = "$2" ] || run git config --global "$1" "$2"
+}
+
+brew_shellenv() {
+  if [ -x /opt/homebrew/bin/brew ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [ -x /usr/local/bin/brew ]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Steps
+
+check_mac() {
+  bold "This Mac"
+  if [ "$(uname -s)" != "Darwin" ]; then
+    echo "computer sets up a Mac. This is $(uname -s)." >&2
+    exit 1
+  fi
+  ok "macOS $(sw_vers -productVersion) on $(uname -m)"
+}
+
+command_line_tools() {
+  bold "Command line tools"
+  if xcode-select -p >/dev/null 2>&1; then
+    ok "installed"
+  else
+    say "Installing Apple's command line tools. Follow the window that opens, then run computer again."
+    run xcode-select --install
+    exit 0
+  fi
+}
+
+homebrew() {
+  bold "Homebrew"
+  brew_shellenv
+  if have brew; then
+    ok "installed"
+  else
+    run /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    brew_shellenv
+  fi
+  # Homebrew on the PATH in new terminals.
+  # shellcheck disable=SC2016 # written to the file as is, expanded by the shell later
+  local line='eval "$(/opt/homebrew/bin/brew shellenv)"'
+  if [ -x /opt/homebrew/bin/brew ] && ! grep -qsF "$line" "$HOME/.zprofile"; then
+    if [ "$DRY_RUN" = 1 ]; then
+      say "would add Homebrew to ~/.zprofile"
+    else
+      printf '\n%s\n' "$line" >>"$HOME/.zprofile"
+    fi
+  fi
+}
+
+apps_and_tools() {
+  bold "Apps and tools (Brewfile)"
+  if [ "$DRY_RUN" = 1 ]; then
+    if have brew && brew bundle check --file="$HERE/Brewfile" >/dev/null 2>&1; then
+      ok "everything in the Brewfile is installed"
+    else
+      say "would run: brew bundle --file=$HERE/Brewfile"
+    fi
+    return
+  fi
+  brew update --quiet
+  brew bundle --file="$HERE/Brewfile"
+  ok "everything in the Brewfile is installed"
+}
+
+node() {
+  bold "Node"
+  if ! have mise; then
+    todo "mise is not installed yet"
+    return
+  fi
+  if mise ls --global node 2>/dev/null | grep -q .; then
+    ok "Node $(mise exec -- node --version 2>/dev/null || echo '(installed)') through mise"
+  else
+    run mise use --global node@lts
+  fi
+  # shellcheck disable=SC2016 # written to the file as is, expanded by the shell later
+  local line='eval "$(mise activate zsh)"'
+  if ! grep -qsF "$line" "$HOME/.zshrc"; then
+    if [ "$DRY_RUN" = 1 ]; then
+      say "would add mise to ~/.zshrc"
+    else
+      printf '\n%s\n' "$line" >>"$HOME/.zshrc"
+    fi
+  fi
+}
+
+one_password() {
+  bold "1Password"
+  # SSH keys and commit signing come from 1Password: no private key on disk.
+  if [ ! -S "$OP_AGENT_SOCK" ]; then
+    todo "Open 1Password, sign in, and turn on Settings > Developer > Use the SSH agent. Then run computer again."
+    return
+  fi
+  ok "the SSH agent is on"
+  mkdir -p "$HOME/.ssh"
+  if ! grep -qs "2BUA8C4S2Y.com.1password" "$HOME/.ssh/config"; then
+    if [ "$DRY_RUN" = 1 ]; then
+      say "would point ~/.ssh/config at the 1Password agent"
+    else
+      printf '\nHost *\n  IdentityAgent "~/Library/Group Containers/2BUA8C4S2Y.com.1password/t/agent.sock"\n' >>"$HOME/.ssh/config"
+      ok "your SSH config uses the 1Password agent"
+    fi
+  fi
+}
+
+git_config() {
+  bold "Git"
+  local name email key
+  name="$(git config --global user.name || true)"
+  email="$(git config --global user.email || true)"
+  if [ -z "$name" ] || [ -z "$email" ]; then
+    if [ "$DRY_RUN" = 1 ] || [ ! -t 0 ]; then
+      todo "Set your name and email: git config --global user.name 'Your Name'; git config --global user.email you@example.com"
+    else
+      [ -n "$name" ] || read -r -p "  Your full name: " name
+      [ -n "$email" ] || read -r -p "  Your work email: " email
+      git config --global user.name "$name"
+      git config --global user.email "$email"
+    fi
+  fi
+  [ -n "$name" ] && ok "commits as $name <$email>"
+  git_set init.defaultBranch main
+  git_set pull.rebase true
+  git_set push.autoSetupRemote true
+
+  if [ "$(git config --global commit.gpgsign || true)" = "true" ]; then
+    ok "commits are signed"
+  elif [ -S "$OP_AGENT_SOCK" ] && [ -x "$OP_SSH_SIGN" ]; then
+    key="$(SSH_AUTH_SOCK="$OP_AGENT_SOCK" ssh-add -L 2>/dev/null | head -1 || true)"
+    if [ -z "$key" ]; then
+      todo "Add an SSH key in 1Password (New item > SSH Key), then run computer again to sign commits with it."
+    else
+      run git config --global gpg.format ssh
+      run git config --global gpg.ssh.program "$OP_SSH_SIGN"
+      run git config --global user.signingkey "$key"
+      run git config --global commit.gpgsign true
+      ok "commits are signed with your 1Password SSH key"
+      say "Add the same key to GitHub as a signing key: Settings > SSH and GPG keys."
+    fi
+  else
+    todo "Commit signing waits for the 1Password SSH agent."
+  fi
+}
+
+github() {
+  bold "GitHub"
+  if ! have gh; then
+    todo "gh is not installed yet"
+  elif gh auth status >/dev/null 2>&1; then
+    ok "signed in to GitHub"
+  elif [ "$DRY_RUN" = 1 ] || [ ! -t 0 ]; then
+    todo "Sign in to GitHub: gh auth login"
+  else
+    gh auth login --git-protocol ssh --web
+  fi
+  run mkdir -p "$HOME/Developer"
+}
+
+macos_defaults() {
+  bold "macOS settings"
+  if [ "$DRY_RUN" = 1 ]; then
+    say "would apply macos/defaults.sh"
+  else
+    # shellcheck source=macos/defaults.sh
+    . "$HERE/macos/defaults.sh"
+    ok "applied (see macos/defaults.sh)"
+  fi
+}
+
+kuberdon_look() {
+  bold "The Kuberdon look"
+  local dir="$HOME/Pictures/Kuberdon"
+  local wallpaper="$dir/wallpaper.png" avatar="$dir/avatar.png"
+  if [ "$DRY_RUN" = 1 ]; then
+    say "would download the wallpaper and the avatar to ~/Pictures/Kuberdon"
+    return
+  fi
+  mkdir -p "$dir"
+  [ -s "$wallpaper" ] || curl -fsSL "$WALLPAPER_URL" -o "$wallpaper"
+  [ -s "$avatar" ] || curl -fsSL "$AVATAR_URL" -o "$avatar"
+  if [ -f "$dir/.wallpaper-set" ]; then
+    ok "wallpaper set"
+  elif osascript -e "tell application \"System Events\" to tell every desktop to set picture to POSIX file \"$wallpaper\"" >/dev/null 2>&1; then
+    touch "$dir/.wallpaper-set"
+    ok "wallpaper set"
+  else
+    todo "Set the wallpaper by hand: right-click $wallpaper in Finder, Set Desktop Picture."
+  fi
+  say "Your user picture: System Settings > Users & Groups > your picture > drag in $avatar"
+}
+
+local_layer() {
+  # Anything only your company or you need, kept out of this public repo.
+  # thoughtbot/laptop's convention: ~/.computer.local runs last, if it exists.
+  if [ -f "$HOME/.computer.local" ]; then
+    bold "Your local layer (~/.computer.local)"
+    if [ "$DRY_RUN" = 1 ]; then
+      say "would run ~/.computer.local"
+    else
+      # shellcheck disable=SC1091
+      . "$HOME/.computer.local"
+    fi
+  fi
+}
+
+sign_ins() {
+  bold "Sign in"
+  say "computer never touches a password. Sign in to each app yourself:"
+  say "1Password first, then GitHub, Claude, Notion, Linear and Superhuman."
+  if [ "$DRY_RUN" = 0 ] && [ -t 0 ]; then
+    for app in 1Password Claude Notion Linear Superhuman; do
+      if [ -d "/Applications/$app.app" ]; then open -g -a "$app" || true; fi
+    done
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# doctor: read only
+
+doctor() {
+  brew_shellenv
+  bold "Apps and tools"
+  if ! have brew; then
+    todo "Homebrew is missing: run ./computer"
+  else
+    local missing
+    # brew bundle check exits non-zero when something is missing; read its output anyway.
+    missing="$(brew bundle check --file="$HERE/Brewfile" --verbose 2>&1 || true)"
+    missing="$(printf '%s\n' "$missing" | grep -E '^→' || true)"
+    if [ -z "$missing" ]; then ok "everything in the Brewfile is installed"; else
+      while IFS= read -r line; do todo "${line#→ }"; done <<<"$missing"
+    fi
+    local outdated
+    outdated="$(brew outdated --quiet 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "$outdated" = 0 ]; then ok "nothing outdated"; else todo "$outdated outdated: brew upgrade"; fi
+  fi
+
+  bold "1Password and Git"
+  if [ -S "$OP_AGENT_SOCK" ]; then ok "1Password SSH agent is on"; else todo "1Password SSH agent is off"; fi
+  if [ "$(git config --global commit.gpgsign || true)" = "true" ]; then ok "commits are signed"; else todo "commits are not signed"; fi
+  if [ -n "$(git config --global user.email || true)" ]; then ok "git knows who you are"; else todo "git has no user.email"; fi
+
+  bold "Accounts"
+  if have gh && gh auth status >/dev/null 2>&1; then ok "GitHub"; else todo "GitHub: gh auth login"; fi
+  if have claude; then ok "Claude Code $(claude --version 2>/dev/null | head -1)"; else todo "Claude Code is missing"; fi
+  if have mise && mise exec -- node --version >/dev/null 2>&1; then ok "Node $(mise exec -- node --version)"; else todo "Node is missing: run ./computer"; fi
+}
+
+# ----------------------------------------------------------------------------
+
+if [ "$COMMAND" = "doctor" ]; then
+  doctor
+else
+  [ "$DRY_RUN" = 1 ] && echo "Dry run: nothing changes."
+  check_mac
+  command_line_tools
+  homebrew
+  apps_and_tools
+  node
+  one_password
+  git_config
+  github
+  macos_defaults
+  kuberdon_look
+  local_layer
+  sign_ins
+fi
+
+if [ "$TODOS" = 0 ]; then
+  bold "All set. Welcome to Kuberdon :-)"
+else
+  bold "$TODOS thing(s) left for you, above. Run computer again after."
+fi
