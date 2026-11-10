@@ -113,8 +113,16 @@ apps_and_tools() {
     return
   fi
   brew update --quiet
-  brew bundle --file="$HERE/Brewfile"
-  ok "everything in the Brewfile is installed"
+  # Homebrew only loads formulae from taps you trust. Trust just Maestro, not its whole tap.
+  if brew help trust >/dev/null 2>&1; then
+    brew tap mobile-dev-inc/tap >/dev/null
+    brew trust --formula mobile-dev-inc/tap/maestro >/dev/null
+  fi
+  if brew bundle --file="$HERE/Brewfile"; then
+    ok "everything in the Brewfile is installed"
+  else
+    todo "some apps did not install. If macOS asked for permission (Privacy & Security, App Management), allow it for your terminal and run ./computer again"
+  fi
 }
 
 node() {
